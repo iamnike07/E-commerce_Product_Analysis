@@ -1,6 +1,57 @@
 # E-Commerce Product Analysis — November 2019
 
-A end-to-end product, session, retention, cart abandonment, and time-to-purchase analysis of the [eCommerce behavior dataset](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store) using **DuckDB** (for low-RAM querying) and **Matplotlib** (for visualization).
+An end-to-end product, session, retention, cart abandonment, and time-to-purchase analysis of the [eCommerce behavior dataset](https://www.kaggle.com/datasets/mkechinov/ecommerce-behavior-data-from-multi-category-store) using **DuckDB** for low-RAM querying, **Matplotlib** for visualization, and **Jupyter Notebook** in VS Code.
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        LOCAL MACHINE                                │
+│                                                                     │
+│   ┌──────────────┐     ┌──────────────────────────────────────┐     │
+│   │              │     │        VS Code + Jupyter              │    │
+│   │  2019-Nov    │     │                                       │    │
+│   │  .csv        │◄────┤   analysis.ipynb                      │    │
+│   │  (~9 GB)     │     │   ┌───────────────────────────────┐   │    │
+│   │  stays on    │     │   │  Cell 1 — Imports + Config    │   │    │
+│   │  disk        │     │   │  Cell 2 — DuckDB Connect      │   │    │
+│   └──────┬───────┘     │   │  Cell 3 — Dataset Overview    │   │    │
+│          │             │   │  Cell 4 — Missing Values      │   │    │
+│          │  lazy scan  │   │  Cell 5 — Event Distribution  │   │    │
+│          ▼             │   │  Cell 6 — Conversion Funnel   │   │    │
+│   ┌──────────────┐     │   │  ...                          │   │    │
+│   │              │     │   │  Cell N — Business Insights   │   │    │
+│   │   DuckDB     │     │   └───────────────────────────────┘   │    │
+│   │   Engine     │     │                                       │    │
+│   │              │     │   inline charts (plt.show())          │    │
+│   │ • columnar   │     └──────────────────┬────────────────────┘    │
+│   │ • lazy scan  │                        │                         │
+│   │ • < 1GB RAM  │                        │ saves                   │
+│   └──────┬───────┘                        ▼                         │
+│          │                  ┌─────────────────────────┐             │
+│          │  small DataFrames│  product_analysis_output/│            │
+│          └─────────────────►│  ├── charts (01–23 PNG) │             │
+│                             │  ├── analysis_summary   │             │
+│                             │  │   .xlsx              │             │
+│                             │  ├── session_retention  │             │
+│                             │  │   _analysis.xlsx     │             │
+│                             │  └── cart_time_insights │             │
+│                             │      .xlsx              │             │
+│                             └─────────────────────────┘             │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### How DuckDB keeps RAM under control
+
+```
+Without DuckDB (pandas):
+  CSV (9 GB) ──► pd.read_csv() ──► RAM: 18–27 GB  ──► CRASH
+
+With DuckDB:
+  CSV (9 GB) ──► DuckDB scan ──► only needed columns/rows ──► small DataFrame ──► RAM: < 1 GB
+```
 
 ---
 
@@ -22,21 +73,11 @@ A end-to-end product, session, retention, cart abandonment, and time-to-purchase
 | `event_type` | string | `view`, `cart`, or `purchase` |
 | `product_id` | int | Unique product identifier |
 | `category_id` | int | Unique category identifier |
-| `category_code` | string | Human-readable category path (has missing values) |
-| `brand` | string | Product brand (has missing values) |
+| `category_code` | string | Human-readable category path — **has missing values** |
+| `brand` | string | Product brand — **has missing values** |
 | `price` | float | Product price in USD |
 | `user_id` | int | Unique user identifier |
-| `user_session` | string | Session identifier — groups events by visit |
-
----
-
-## Why DuckDB instead of pandas?
-
-Loading 67M rows into pandas requires 18–27 GB of RAM, which crashes most laptops. DuckDB queries the CSV directly from disk using columnar scanning — each query uses under 1 GB of RAM regardless of file size, and returns a small result DataFrame to matplotlib.
-
-```
-CSV on disk (9 GB)  →  DuckDB engine (lazy scan)  →  Small DataFrame  →  Chart
-```
+| `user_session` | string | Groups all events belonging to one visit |
 
 ---
 
@@ -45,13 +86,13 @@ CSV on disk (9 GB)  →  DuckDB engine (lazy scan)  →  Small DataFrame  →  C
 ```
 project/
 │
-├── ecommerce_duckdb_analysis.py (Main analysis (sections 1–14))
-├──session_retention_analysis (Session + retention analysis)
-├── cart_time_insights_analysis (Cart abandonment + TTP + insights)
+├── E-commerce.ipynb                     # Single notebook — all analysis
+├── 2019-Nov.csv                       # Raw dataset (download from Kaggle)
+├── README.md                          # This file
 │
-├── 2019-Nov.csv                      # Raw dataset (download from Kaggle)
-│
-└── product_analysis_output/          # Auto-created on first run
+└── product_analysis_output/           # Auto-created on first run
+    │
+    ├── ── Product Analysis ──
     ├── 01_event_type_distribution.png
     ├── 02_conversion_funnel.png
     ├── 03_top_categories.png
@@ -64,17 +105,23 @@ project/
     ├── 10_hourly_purchase_pattern.png
     ├── 11_category_conversion_rates.png
     ├── 12_brand_conversion_rates.png
+    │
+    ├── ── Session & Retention ──
     ├── 13_session_distributions.png
     ├── 14_session_depth_funnel.png
     ├── 15_conversion_per_session_category.png
     ├── 16_user_retention_segments.png
     ├── 17_retention_cohort_heatmap.png
+    │
+    ├── ── Cart & Time-to-Purchase ──
     ├── 18_cart_abandonment_funnel.png
     ├── 19_abandonment_by_category.png
     ├── 20_abandonment_by_price.png
     ├── 21_time_to_purchase.png
     ├── 22_ttp_by_category.png
     ├── 23_dow_purchase_pattern.png
+    │
+    ├── ── Excel Exports ──
     ├── analysis_summary.xlsx
     ├── session_retention_analysis.xlsx
     └── cart_time_insights.xlsx
@@ -82,98 +129,87 @@ project/
 
 ---
 
-## Installation
+## Notebook Structure
 
-```bash
-pip install duckdb pandas matplotlib seaborn openpyxl ipykernel
-```
+The single `analysis.ipynb` is organised into 4 parts. Each part maps to a comment block in the code — paste each block into its own cell and run with `Shift+Enter`.
 
-Recommended: run in **VS Code** with the Jupyter extension installed.
+### Part 1 — Setup
+
+| Cell | Content |
+|---|---|
+| 1 | Imports (`duckdb`, `pandas`, `matplotlib`, etc.) |
+| 2 | Config — set `FILE_PATH`, `OUTPUT_DIR`, `CHUNKSIZE` |
+| 3 | DuckDB connect + `q()` helper function |
+
+### Part 2 — Product Analysis (Sections 1–14)
+
+| Section | Chart | What it shows |
+|---|---|---|
+| 1 — Dataset Overview | — | Shape, date range, unique users/products |
+| 2 — Missing Values | — | % missing in `category_code` and `brand` |
+| 3 — Event Distribution | `01` | Count of views, carts, purchases |
+| 4 — Conversion Funnel | `02` | View → cart → purchase drop-off |
+| 5 — Top Categories | `03` | Top 10 by views and purchases |
+| 6 — Top Brands | `04` | Top 15 by views and purchases |
+| 7 — Price Analysis | `05` `06` | Distribution + avg by category |
+| 8 — Top Products | `07` | Most viewed and most purchased |
+| 9 — Revenue | `08` | Total revenue, AOV, revenue by category |
+| 10 — Daily Trends | `09` | All event types across November |
+| 11 — Hourly Pattern | `10` | Peak purchase hours |
+| 12 — Category Conv. | `11` | View→purchase rate by category |
+| 13 — Brand Conv. | `12` | View→purchase rate by brand |
+
+### Part 3 — Session & Retention Analysis
+
+| Section | Chart | What it shows |
+|---|---|---|
+| S1 — Session Metrics | `13` | Avg length, events/session, conv/session |
+| S2 — Session Depth | `14` | How deep users go per session |
+| S3 — Conv per Session | `15` | Best-converting categories at session level |
+| S4 — User Retention | `16` | New vs returning vs power users |
+| S5 — Cohort Heatmap | `17` | 7-day retention heatmap by cohort day |
+
+### Part 4 — Cart Abandonment + Time-to-Purchase + Insights
+
+| Section | Chart | What it shows |
+|---|---|---|
+| C1 — Abandonment Overview | `18` | Overall abandonment rate + donut chart |
+| C2 — Abandonment by Category | `19` | Which categories lose the most carts |
+| C3 — Abandonment by Price | `20` | Whether price range affects abandonment |
+| T1 — TTP Distribution | `21` | Time from first view to purchase |
+| T2 — TTP by Category | `22` | Which categories take longest to convert |
+| T3 — Day of Week | `23` | Best days for purchases and revenue |
+| FINAL — Business Insights | — | Auto-generated findings + recommendations |
 
 ---
 
-## Usage
-
-### Option A — Merge into one file and run once
-
-**Mac / Linux**
-```bash
-cat ecommerce_duckdb_analysis.py \
-    session_retention_analysis.py \
-    cart_time_insights_analysis.py > full_analysis.py
-
-python full_analysis.py
-```
-
-**Windows**
-```cmd
-type ecommerce_duckdb_analysis.py session_retention_analysis.py cart_time_insights_analysis.py > full_analysis.py
-python full_analysis.py
-```
-
-### Option B — Run cell by cell in Jupyter (VS Code)
-
-Open `full_analysis.py` as a notebook in VS Code. Each analysis section is separated by a comment block — paste each section into its own cell and run with `Shift+Enter`.
-
-> Before running, update `FILE_PATH` at the top of `ecommerce_duckdb_analysis.py` to your actual CSV path.
-
----
-
-## Analysis Sections
-
-### Part 1 — Product Analysis (`ecommerce_duckdb_analysis.py`)
-
-| # | Section | What it shows |
-|---|---|---|
-| 1 | Dataset Overview | Shape, date range, unique users/products |
-| 2 | Missing Value Analysis | % missing in `category_code` and `brand` |
-| 3 | Event Type Distribution | Count of views, carts, purchases |
-| 4 | Conversion Funnel | View → cart → purchase drop-off rates |
-| 5 | Top Categories | Top 10 by views and by purchases |
-| 6 | Top Brands | Top 15 by views and by purchases |
-| 7 | Price Analysis | Distribution, avg by category, stats by event type |
-| 8 | Top Products | Most viewed and most purchased products with metadata |
-| 9 | Revenue Analysis | Total revenue, avg order value, revenue by category |
-| 10 | Daily Trends | All event types plotted across November |
-| 11 | Hourly Purchase Pattern | Which hours of the day drive the most purchases |
-| 12 | Category Conversion Rates | View → purchase rate per category |
-| 13 | Brand Conversion Rates | View → purchase rate per brand |
-
-### Part 2 — Session & Retention Analysis (`session_retention_analysis`)
-
-| # | Section | What it shows |
-|---|---|---|
-| S1 | Session Metrics | Avg session length, events per session, conversion per session |
-| S2 | Session Depth Funnel | How many sessions reached view / cart / purchase |
-| S3 | Conversion per Session by Category | Which categories convert best at session level |
-| S4 | User Retention Segments | New vs returning users, power users |
-| S5 | 7-Day Retention Cohort Heatmap | % of users returning on Day 1–6 after first visit |
-
-### Part 3 — Cart Abandonment + Time-to-Purchase (`cart_time_insights_analysis`)
-
-| # | Section | What it shows |
-|---|---|---|
-| C1 | Cart Abandonment Overview | Overall abandonment rate, estimated lost revenue |
-| C2 | Abandonment by Category | Which categories lose the most carts |
-| C3 | Abandonment by Price Range | Whether price affects abandonment rate |
-| T1 | Time-to-Purchase Distribution | How long from first view to purchase |
-| T2 | TTP by Category | Which categories take longest to convert |
-| T3 | Day of Week Patterns | Best days for purchases and revenue |
-
----
-
-## Key Metrics Produced
+## Key Metrics
 
 | Metric | Description |
 |---|---|
 | View → Purchase rate | % of views that eventually result in a purchase |
 | Cart abandonment rate | % of cart sessions that never converted |
-| Avg session length | Mean time (minutes) per user session |
+| Avg session length | Mean duration (minutes) per user session |
 | Events per session | Avg number of actions per session |
-| Conversion per session | % of sessions that included a purchase |
-| Median time-to-purchase | Median minutes from first product view to buying it |
-| 7-day retention | % of Day-0 users still active on Day 1, 2 ... 6 |
+| Conversion per session | % of sessions containing at least one purchase |
+| Median time-to-purchase | Median minutes from first product view to buying |
+| 7-day retention | % of Day-0 users still active on Day 1–6 |
 | Recoverable revenue | Estimated revenue if abandoned carts were partially recovered |
+
+---
+
+## Business Insights (Auto-generated)
+
+The final notebook cell automatically generates dynamic insights from the computed metrics:
+
+| # | Topic | Example finding |
+|---|---|---|
+| 1 | Cart Abandonment | Abandonment rate, worst category, estimated recoverable revenue |
+| 2 | Conversion Gap | Where the biggest drop-off actually happens |
+| 3 | Time-to-Purchase | Impulse vs considered buyer behaviour |
+| 4 | Purchase Timing | Peak hour + best day for ad scheduling |
+| 5 | Session Quality | Session depth and bounce reduction strategies |
+| 6 | Data Quality | Impact of missing brand/category on conversion |
 
 ---
 
@@ -187,46 +223,40 @@ Open `full_analysis.py` as a notebook in VS Code. Each analysis section is separ
 
 ---
 
-## Business Insights (Auto-generated)
+## Installation
 
-The final section of `cart_time_insights_analysis` automatically generates dynamic insights from the analysis results, covering:
+```bash
+pip install duckdb pandas matplotlib seaborn openpyxl ipykernel
+```
 
-1. **Cart Abandonment** — abandonment rate, worst category, estimated recoverable revenue
-2. **Conversion Gap** — where the biggest drop-off actually occurs (cart→purchase vs view→cart)
-3. **Time-to-Purchase** — impulse vs considered buyer behaviour, retargeting opportunities
-4. **Purchase Timing** — peak hour and best day of week for ad scheduling
-5. **Session Quality** — session depth recommendations, bounce reduction strategies
-6. **Data Quality** — impact of missing brand/category on conversion
+Open VS Code → install the **Jupyter** extension → open `analysis.ipynb` → Run All.
+
+> Update `FILE_PATH` in the config cell to point to your `2019-Nov.csv` before running.
 
 ---
 
 ## Missing Value Handling
 
-Both `category_code` and `brand` have significant missing values. Rather than dropping rows, all queries use SQL `COALESCE` to substitute `'unknown_category'` and `'unknown_brand'` inline, preserving full row counts while excluding unknowns from brand/category-specific charts.
+Both `category_code` and `brand` have significant missing values. All queries use SQL `COALESCE` to substitute `'unknown_category'` and `'unknown_brand'` inline — preserving full row counts while excluding unknowns from brand/category charts.
 
 ---
 
 ## Notes
 
-- All timestamps in the dataset are **UTC**. Hourly and daily patterns reflect UTC time, not local store time.
-- Revenue figures are based on the `price` column from purchase events only.
-- Session conversion rate counts any session containing at least one purchase event.
-- The 7-day cohort heatmap is most meaningful when the dataset covers a full month — the last 6 days of November will show incomplete cohort data by design.
-- If running on the 500K sample instead of the full 67M row file, revenue totals and absolute counts will not reflect the true November figures. Ratios and rates (conversion %, abandonment %) remain valid.
+- All timestamps are **UTC**. Hourly and daily patterns reflect UTC, not local store time.
+- Revenue is computed from the `price` column on `purchase` events only.
+- If running on a sample instead of the full 67M row file, revenue totals and absolute counts will differ from the true November figures. Ratios and rates (conversion %, abandonment %) remain statistically valid.
+- The last 6 days of November show incomplete cohort data in the retention heatmap — this is expected behaviour, not a bug.
 
 ---
 
 ## Requirements
 
-| Package | Version | Purpose |
+| Package | Min version | Purpose |
 |---|---|---|
-| `duckdb` | >= 0.9 | Query CSV without loading into RAM |
-| `pandas` | >= 1.5 | DataFrame operations on query results |
-| `matplotlib` | >= 3.5 | All charts and visualizations |
-| `seaborn` | >= 0.12 | Chart styling |
-| `openpyxl` | >= 3.0 | Excel export |
-| `ipykernel` | >= 6.0 | Jupyter notebook support in VS Code |
-
-```bash
-pip install duckdb pandas matplotlib seaborn openpyxl ipykernel
-```
+| `duckdb` | 0.9 | Query CSV without loading into RAM |
+| `pandas` | 1.5 | DataFrame operations on query results |
+| `matplotlib` | 3.5 | All charts and visualizations |
+| `seaborn` | 0.12 | Chart styling |
+| `openpyxl` | 3.0 | Excel export |
+| `ipykernel` | 6.0 | Jupyter notebook support in VS Code |
